@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compete Organic — SEO Analyzer by Ira AI</title>
+  <meta name="description" content="Free SEO analyzer. Extract meta tags, schema, word count, and page speed from any URL." />
+  <link rel="stylesheet" href="tools.css" />
+  <style>
+    /* SEO page specific */
+    .tool-hero { padding: 60px 0 32px; }
+    .tool-hero .hero-title { font-size: clamp(40px, 6vw, 72px); }
+
+    .analyze-form { margin-top: 32px; max-width: 720px; }
+
+    .loader-stage {
+      display: none;
+      margin-top: 40px;
+      padding: 32px;
+      border: 1px dashed var(--border-2);
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+
+    .loader-stage.active { display: block; }
+
+    .loader-stage .dots {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .loader-stage .dots span {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--amber);
+      animation: bounce 1.2s var(--ease) infinite;
+    }
+
+    .loader-stage .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .loader-stage .dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.5); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .loader-stage .stage-text {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* Results */
+    .results { display: none; margin-top: 56px; padding-bottom: 80px; }
+    .results.active { display: block; }
+
+    .result-header {
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .result-header .url {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--amber);
+      word-break: break-all;
+    }
+
+    .result-header .meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric.large { grid-column: span 6; }
+    .metric.medium { grid-column: span 4; }
+    .metric.small { grid-column: span 3; }
+    .metric.full { grid-column: span 12; }
+
+    .metric-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .metric-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .metric-value {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-variation-settings: "SOFT" 40, "opsz" 72;
+      font-size: 44px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .metric-value.small { font-size: 22px; }
+    .metric-value em { color: var(--amber); font-style: italic; font-weight: 300; }
+
+    .metric-sub {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .metric-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .badge-good   { background: rgba(52,211,153,.12); color: var(--mint); border: 1px solid rgba(52,211,153,.3); }
+    .badge-warn   { background: rgba(245,158,11,.12); color: var(--amber); border: 1px solid rgba(245,158,11,.3); }
+    .badge-bad    { background: rgba(251,113,133,.12); color: var(--rose); border: 1px solid rgba(251,113,133,.3); }
+    .badge-neutral{ background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Score gauge */
+    .score-gauge {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .gauge-ring {
+      flex-shrink: 0;
+      position: relative;
+      width: 120px;
+      height: 120px;
+    }
+
+    .gauge-ring svg { transform: rotate(-90deg); }
+    .gauge-ring .bg { stroke: var(--border); fill: none; stroke-width: 10; }
+    .gauge-ring .fill {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1.2s var(--ease);
+    }
+
+    .gauge-label {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-variation-settings: "SOFT" 40;
+      color: var(--text);
+    }
+
+    /* Schema list */
+    .schema-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .schema-pill {
+      padding: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+    }
+
+    .schema-pill.none { color: var(--text-dim); font-style: italic; }
+
+    /* Text preview */
+    .text-preview {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 16px;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    /* Fact section */
+    .fact-section {
+      margin-top: 48px;
+      padding: 48px;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(167, 139, 250, 0.04));
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .fact-section::before {
+      content: '?';
+      position: absolute;
+      right: -30px;
+      top: -50px;
+      font-family: var(--font-display);
+      font-size: 280px;
+      font-style: italic;
+      font-variation-settings: "SOFT" 100;
+      color: rgba(245, 158, 11, 0.06);
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .fact-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .fact-label::before { content: '✦'; }
+
+    .fact-quote {
+      font-family: var(--font-display);
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.35;
+      letter-spacing: -0.02em;
+      font-weight: 400;
+      font-variation-settings: "SOFT" 30, "opsz" 96;
+      color: var(--text);
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .fact-quote em { font-style: italic; color: var(--amber); }
+
+    .fact-source {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+
+    .fact-cycle-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--amber);
+      transition: all 0.3s var(--ease);
+      z-index: 2;
+    }
+
+    .fact-cycle-btn:hover {
+      background: var(--amber);
+      color: var(--bg);
+      transform: rotate(180deg);
+    }
+
+    /* Error */
+    .error-msg {
+      padding: 16px 20px;
+      background: rgba(251, 113, 133, 0.08);
+      border: 1px solid rgba(251, 113, 133, 0.3);
+      border-radius: 10px;
+      color: var(--rose);
+      margin-top: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-msg.show { display: block; }
+
+    @media (max-width: 768px) {
+      .metric.large, .metric.medium, .metric.small { grid-column: span 12; }
+      .score-gauge { flex-direction: column; align-items: flex-start; }
+      .fact-section { padding: 32px 24px; }
+      .fact-section::before { font-size: 180px; right: -20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div class="container">
+        <nav class="nav">
+          <a href="/" class="brand">
+            <span class="brand-mark">IA</span>
+            <span>Ira&nbsp;AI</span>
+          </a>
+          <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="tools.html">Tools</a></li>
+          </ul>
+          <a href="/signup.html" class="nav-cta">Get Started →</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="tool-hero">
+        <div class="container">
+          <a href="tools.html" class="back-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>All Tools</span>
+          </a>
+
+          <div class="hero-eyebrow">Tool · 01 / 04 · SEO Analyzer</div>
+          <h1 class="hero-title fade-up">
+            Compete<br><em>Organic.</em>
+          </h1>
+          <p class="hero-subtitle fade-up" style="animation-delay:.1s">
+            Paste a URL. We'll extract its meta tags, schema markup, word count, last-modified
+            date, and a fast performance estimate — so you can see exactly what makes it rank.
+          </p>
+
+          <div class="analyze-form fade-up" style="animation-delay:.2s">
+            <label class="field-label" for="url-input">Target URL</label>
+            <div class="input-shell">
+              <input id="url-input" type="url" placeholder="https://example.com/your-page" autocomplete="off" spellcheck="false" />
+              <button id="analyze-btn" class="btn btn-primary">
+                Analyze
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+            <div id="error-msg" class="error-msg"></div>
+          </div>
+
+          <!-- Loader -->
+          <div id="loader" class="loader-stage">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div id="stage-text" class="stage-text">Fetching the page...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="container">
+        <div id="results" class="results">
+
+          <div class="result-header">
+            <div>
+              <div class="meta" style="margin-bottom:4px">Analyzed URL</div>
+              <div id="result-url" class="url">—</div>
+            </div>
+            <div class="meta" id="result-timestamp">—</div>
+          </div>
+
+          <div class="section-label">
+            <span class="num">§01</span>
+            <span>Meta tags</span>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric large">
+              <div class="metric-head">
+                <span class="metric-label">Meta Title</span>
+                <span id="title-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div id="title-value" class="metric-value small">—</div>
+              <div id="title-sub" class="metric-sub">—</div>
+            </div>
+
+            <div class="metric large">
+              <div class="metric-head">
+                <span class="metric-label">Meta Description</span>
+                <span id="desc-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div id="desc-value" class="metric-value small">—</div>
+              <div id="desc-sub" class="metric-sub">—</div>
+            </div>
+          </div>
+
+          <div class="section-label">
+            <span class="num">§02</span>
+            <span>Content & structure</span>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric medium">
+              <div class="metric-head">
+                <span class="metric-label">Word Count</span>
+                <span id="wc-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div class="metric-value"><span id="wc-value">0</span></div>
+              <div id="wc-sub" class="metric-sub">—</div>
+            </div>
+
+            <div class="metric medium">
+              <div class="metric-head">
+                <span class="metric-label">Last Updated</span>
+              </div>
+              <div id="updated-value" class="metric-value small">—</div>
+              <div id="updated-sub" class="metric-sub">—</div>
+            </div>
+
+            <div class="metric medium">
+              <div class="metric-head">
+                <span class="metric-label">Headings (H1 / H2 / H3)</span>
+              </div>
+              <div class="metric-value"><span id="h1-count">0</span> / <span id="h2-count">0</span> / <span id="h3-count">0</span></div>
+              <div id="heading-sub" class="metric-sub">—</div>
+            </div>
+
+            <div class="metric full">
+              <div class="metric-head">
+                <span class="metric-label">Schema Markup Found</span>
+                <span id="schema-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div id="schema-list" class="schema-list">
+                <span class="schema-pill none">Waiting for analysis...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label">
+            <span class="num">§03</span>
+            <span>Performance estimate</span>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric large">
+              <div class="metric-head">
+                <span class="metric-label">Page Speed Score</span>
+                <span id="speed-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div class="score-gauge">
+                <div class="gauge-ring">
+                  <svg width="120" height="120" viewBox="0 0 120 120">
+                    <circle class="bg" cx="60" cy="60" r="52"/>
+                    <circle id="gauge-fill" class="fill" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+                  </svg>
+                  <div id="gauge-label" class="gauge-label">0</div>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:13px; color: var(--text-muted); margin-bottom: 10px;" id="speed-desc">Estimating...</div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;" class="mono" id="speed-details"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="metric large">
+              <div class="metric-head">
+                <span class="metric-label">Resources Loaded</span>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 8px;">
+                <div>
+                  <div class="metric-value" style="font-size: 32px;"><span id="css-count">0</span></div>
+                  <div class="metric-sub">Stylesheets</div>
+                </div>
+                <div>
+                  <div class="metric-value" style="font-size: 32px;"><span id="js-count">0</span></div>
+                  <div class="metric-sub">Scripts</div>
+                </div>
+                <div>
+                  <div class="metric-value" style="font-size: 32px;"><span id="img-count">0</span></div>
+                  <div class="metric-sub">Images</div>
+                </div>
+                <div>
+                  <div class="metric-value" style="font-size: 32px;"><span id="link-count">0</span></div>
+                  <div class="metric-sub">Links</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="metric full">
+              <div class="metric-head">
+                <span class="metric-label">Image Alt-text Coverage</span>
+                <span id="alt-badge" class="metric-badge badge-neutral">—</span>
+              </div>
+              <div class="metric-value" style="font-size: 32px;"><span id="alt-ratio">0 / 0</span> <em style="font-size: 18px;"><span id="alt-percent">(0%)</span></em></div>
+              <div id="alt-sub" class="metric-sub">—</div>
+            </div>
+          </div>
+
+          <!-- Do you know? facts -->
+          <div class="fact-section">
+            <button id="fact-cycle" class="fact-cycle-btn" title="Another fact">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+            <div class="fact-label">Do you know?</div>
+            <div id="fact-text" class="fact-quote">—</div>
+            <div id="fact-source" class="fact-source">—</div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-note">Ira&nbsp;AI · Tools · SEO Analyzer</div>
+          <div class="footer-note">© 2026 — Ira&nbsp;AI</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="seo-analyzer.js"></script>
+</body>
+</html>

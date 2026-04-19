@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Long video, short answer — YouTube Summarizer by Ira AI</title>
+  <meta name="description" content="Paste a YouTube link and get the gist: title, channel, chapters, and a tight AI summary." />
+  <link rel="stylesheet" href="tools.css" />
+  <style>
+    .tool-hero { padding: 60px 0 32px; }
+    .tool-hero .hero-title { font-size: clamp(40px, 6vw, 72px); }
+    .tool-hero .hero-title em { color: var(--rose); }
+    .hero-eyebrow { color: var(--rose); }
+    .hero-eyebrow::before { background: var(--rose); }
+
+    .input-shell:focus-within { border-color: var(--rose); box-shadow: 0 0 0 4px rgba(251, 113, 133, 0.15); }
+
+    .yt-btn {
+      background: var(--rose) !important;
+      box-shadow: 0 0 0 1px var(--rose), 0 8px 30px -8px rgba(251,113,133,0.35) !important;
+    }
+    .yt-btn:hover { background: #FDA4AF !important; }
+
+    .loader-stage {
+      display: none;
+      margin-top: 40px;
+      padding: 32px;
+      border: 1px dashed var(--border-2);
+      border-radius: var(--radius-lg);
+      text-align: center;
+    }
+    .loader-stage.active { display: block; }
+    .loader-stage .dots { display: inline-flex; gap: 6px; margin-bottom: 16px; }
+    .loader-stage .dots span {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--rose);
+      animation: bounce 1.2s var(--ease) infinite;
+    }
+    .loader-stage .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .loader-stage .dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.5); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+    .loader-stage .stage-text {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .error-msg {
+      padding: 16px 20px;
+      background: rgba(251, 113, 133, 0.08);
+      border: 1px solid rgba(251, 113, 133, 0.3);
+      border-radius: 10px;
+      color: var(--rose);
+      margin-top: 16px;
+      font-size: 14px;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    /* Results */
+    .yt-results { display: none; margin-top: 56px; padding-bottom: 80px; }
+    .yt-results.active { display: block; animation: fadeUp 0.7s var(--ease) both; }
+
+    .video-layout {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 32px;
+      align-items: start;
+      margin-bottom: 40px;
+    }
+
+    .video-frame {
+      position: relative;
+      aspect-ratio: 16/9;
+      width: 100%;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+
+    .video-frame iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .video-meta .meta-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .video-title {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-variation-settings: "SOFT" 40, "opsz" 96;
+      font-size: 32px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .video-channel {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .channel-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--rose);
+    }
+
+    .video-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .video-stat {
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .video-stat .label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    .video-stat .value {
+      font-family: var(--font-display);
+      font-size: 22px;
+      color: var(--text);
+    }
+
+    /* Summary section */
+    .summary-section {
+      padding: 36px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .summary-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .summary-title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 400;
+      font-variation-settings: "SOFT" 30;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .summary-title em { font-style: italic; color: var(--rose); font-weight: 300; }
+
+    .summary-body {
+      font-family: var(--font-display);
+      font-weight: 300;
+      font-size: 19px;
+      line-height: 1.65;
+      color: var(--text);
+      letter-spacing: -0.005em;
+    }
+
+    .summary-body em { font-style: italic; color: var(--rose); }
+
+    /* Highlights list */
+    .highlights {
+      display: grid;
+      gap: 12px;
+    }
+
+    .highlight-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 18px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all 0.25s var(--ease);
+    }
+
+    .highlight-item:hover {
+      border-color: var(--rose);
+      background: var(--surface-2);
+    }
+
+    .timestamp-chip {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      background: rgba(251, 113, 133, 0.12);
+      color: var(--rose);
+      border: 1px solid rgba(251, 113, 133, 0.25);
+      border-radius: 6px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.25s var(--ease);
+    }
+
+    .timestamp-chip:hover {
+      background: var(--rose);
+      color: var(--bg);
+    }
+
+    .highlight-text {
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* Description card */
+    .description-card {
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+    }
+
+    .description-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      max-height: 260px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .description-text::-webkit-scrollbar { width: 6px; }
+    .description-text::-webkit-scrollbar-track { background: transparent; }
+    .description-text::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
+
+    .description-text.empty { color: var(--text-dim); font-style: italic; }
+
+    /* Notice */
+    .notice {
+      margin-top: 24px;
+      padding: 14px 18px;
+      background: rgba(96, 165, 250, 0.06);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--sky);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .notice svg { flex-shrink: 0; margin-top: 2px; }
+
+    @media (max-width: 900px) {
+      .video-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .video-title { font-size: 24px; }
+      .summary-section, .description-card { padding: 22px; }
+      .summary-body { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div class="container">
+        <nav class="nav">
+          <a href="/" class="brand">
+            <span class="brand-mark">IA</span>
+            <span>Ira&nbsp;AI</span>
+          </a>
+          <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="tools.html">Tools</a></li>
+          </ul>
+          <a href="/signup.html" class="nav-cta">Get Started →</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="tool-hero">
+        <div class="container">
+          <a href="tools.html" class="back-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>All Tools</span>
+          </a>
+          <div class="hero-eyebrow">Tool · 03 / 04 · YouTube Summarizer</div>
+          <h1 class="hero-title fade-up">
+            Long video,<br><em>short answer.</em>
+          </h1>
+          <p class="hero-subtitle fade-up" style="animation-delay:.1s">
+            Paste a YouTube URL. We extract the video, its chapters, and write a crisp summary from the
+            author's own description — so you know whether to watch all 42 minutes or skip ahead.
+          </p>
+
+          <div class="analyze-form fade-up" style="animation-delay:.2s; margin-top:32px; max-width:720px;">
+            <label class="field-label" for="yt-input">YouTube URL</label>
+            <div class="input-shell">
+              <input id="yt-input" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false" />
+              <button id="yt-btn" class="btn btn-primary yt-btn">
+                Summarize
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+            <div id="yt-error" class="error-msg"></div>
+          </div>
+
+          <div id="yt-loader" class="loader-stage">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <div id="yt-stage" class="stage-text">Fetching video metadata...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="container">
+        <div id="yt-results" class="yt-results">
+
+          <div class="video-layout">
+            <div class="video-frame">
+              <iframe id="yt-embed" src="" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+
+            <div class="video-meta">
+              <div class="meta-label">Now Playing</div>
+              <h2 id="yt-title" class="video-title">—</h2>
+              <div id="yt-channel-wrap" class="video-channel">
+                <span class="channel-dot"></span>
+                <span id="yt-channel">—</span>
+              </div>
+
+              <div class="video-stats">
+                <div class="video-stat">
+                  <div class="label">Video ID</div>
+                  <div class="value mono" id="yt-id" style="font-size: 14px;">—</div>
+                </div>
+                <div class="video-stat">
+                  <div class="label">Chapters Found</div>
+                  <div class="value" id="yt-chapters-count">0</div>
+                </div>
+              </div>
+
+              <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+                <a id="yt-watch-link" href="#" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size: 12px; padding: 10px 16px;">
+                  Open on YouTube
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary -->
+          <div class="summary-section">
+            <div class="summary-head">
+              <h3 class="summary-title">The <em>gist</em> of it.</h3>
+              <span class="metric-badge badge-neutral" id="summary-source">Generated from description</span>
+            </div>
+            <div id="yt-summary" class="summary-body">—</div>
+          </div>
+
+          <!-- Chapters -->
+          <div id="chapters-wrap" style="margin-bottom: 32px;">
+            <div class="section-label">
+              <span class="num">§01</span>
+              <span>Chapters & key moments</span>
+            </div>
+            <div id="chapters-list" class="highlights"></div>
+          </div>
+
+          <!-- Description -->
+          <div>
+            <div class="section-label">
+              <span class="num">§02</span>
+              <span>Full description (author's words)</span>
+            </div>
+            <div class="description-card">
+              <div id="yt-description" class="description-text">—</div>
+            </div>
+          </div>
+
+          <div class="notice">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Summaries are derived from publicly available metadata. For a full AI transcript summary, connect Ira AI Pro, which runs the video audio through Claude.</span>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-note">Ira&nbsp;AI · Tools · YouTube Summarizer</div>
+          <div class="footer-note">© 2026 — Ira&nbsp;AI</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="youtube-summarizer.js"></script>
+</body>
+</html>
