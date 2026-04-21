@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Typing Speed Test — Ira AI</title>
+  <meta name="description" content="Measure your WPM and accuracy. Works on desktop and mobile." />
+  <link rel="stylesheet" href="tools.css" />
+  <style>
+    .tool-hero { padding: 60px 0 32px; }
+    .tool-hero .hero-title { font-size: clamp(40px, 6vw, 72px); }
+    .tool-hero .hero-title em { color: var(--violet); }
+    .hero-eyebrow { color: var(--violet); }
+    .hero-eyebrow::before { background: var(--violet); }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin: 28px 0 20px;
+    }
+
+    .stat {
+      padding: 18px 20px;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+    }
+
+    .stat.live { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(124,58,237,.08); }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-variation-settings: "SOFT" 40, "opsz" 72;
+      font-size: 38px;
+      line-height: 1;
+      letter-spacing: -.03em;
+      color: var(--text);
+    }
+
+    .stat-value.violet { color: var(--violet); }
+    .stat-unit { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-left: 3px; }
+
+    /* Config */
+    .config-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-card);
+    }
+
+    .config-group { display: flex; align-items: center; gap: 7px; }
+
+    .config-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .chip {
+      padding: 6px 11px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      transition: all .2s;
+      cursor: pointer;
+    }
+    .chip:hover { color: var(--text); }
+    .chip.active { background: var(--violet); border-color: var(--violet); color: #fff; font-weight: 600; }
+
+    .config-spacer { flex: 1; }
+
+    /* ===== TYPING ZONE ===== */
+    .typing-zone {
+      background: var(--surface);
+      border: 1.5px solid var(--border-2);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      cursor: text;
+      position: relative;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .typing-zone.focused {
+      border-color: var(--violet);
+      box-shadow: 0 0 0 3px rgba(124,58,237,.10);
+    }
+
+    /* Text display area */
+    .text-display-wrap {
+      padding: 32px 36px 16px;
+      pointer-events: none; /* clicks pass through to textarea */
+    }
+
+    #text-display {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      line-height: 2.0;
+      letter-spacing: .02em;
+      color: var(--text-dim);
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      width: 100%;
+      min-height: 120px;
+    }
+
+    /* Chars must be purely inline — no position or display changes */
+    #text-display .char { transition: color .07s, background .07s; }
+    #text-display .char.correct { color: var(--text); }
+    #text-display .char.incorrect { color: var(--rose); background: rgba(225,29,72,.09); border-radius: 2px; }
+    #text-display .char.current {
+      color: var(--text);
+      background: rgba(124,58,237,.12);
+      border-radius: 2px;
+      box-shadow: -2px 0 0 0 var(--violet);
+      animation: caretBlink 1s ease-in-out infinite;
+    }
+
+    @keyframes caretBlink {
+      0%,100% { background: rgba(124,58,237,.14); }
+      50%      { background: rgba(124,58,237,.04); }
+    }
+
+    /*
+     * MOBILE FIX: The textarea sits behind the text display.
+     * On mobile, tapping the zone focuses the textarea which opens
+     * the native keyboard. On desktop, keydown is captured globally.
+     * The textarea is transparent and overlays the whole zone.
+     */
+    #typing-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      resize: none;
+      border: 0;
+      background: transparent;
+      color: transparent;
+      caret-color: transparent;
+      font-size: 16px; /* prevents iOS auto-zoom */
+      z-index: 10;
+      cursor: text;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    /* Mobile tap hint */
+    .typing-hint {
+      text-align: center;
+      padding: 10px 16px 18px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    /* Progress */
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .progress-bar {
+      flex: 1;
+      min-width: 160px;
+      height: 4px;
+      background: var(--border-2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(to right, var(--violet), var(--amber));
+      width: 0%;
+      transition: width .3s ease;
+    }
+
+    /* Result */
+    .result-overlay {
+      display: none;
+      margin-top: 36px;
+      padding: 44px;
+      background: var(--surface);
+      border: 1.5px solid rgba(124,58,237,.22);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .result-overlay.active { display: block; animation: fadeUp .6s var(--ease) both; }
+
+    .result-title {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -.03em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .result-title em { color: var(--violet); }
+    .result-subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 28px; }
+
+    .result-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .result-stat {
+      padding: 18px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .result-stat .big {
+      font-family: var(--font-display);
+      font-weight: 300;
+      font-style: italic;
+      font-size: 44px;
+      line-height: 1;
+      color: var(--violet);
+      letter-spacing: -.03em;
+    }
+
+    .result-stat .label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
+
+    .result-verdict { font-family: var(--font-display); font-style: italic; font-size: 18px; color: var(--text-muted); margin-bottom: 22px; }
+    .result-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    @media (max-width: 768px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .result-stats { grid-template-columns: repeat(2, 1fr); }
+      #text-display { font-size: 17px; line-height: 1.9; }
+      .text-display-wrap { padding: 22px 20px 10px; }
+      .result-overlay { padding: 28px 20px; }
+      .result-title { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <div class="container">
+        <nav class="nav">
+          <a href="/" class="brand">
+            <span class="brand-mark">IA</span>
+            <span>Ira&nbsp;AI</span>
+          </a>
+          <ul class="nav-links">
+            <li><a href="/">Home</a></li>
+            <li><a href="tools.html">Tools</a></li>
+          </ul>
+          <a href="/signup.html" class="nav-cta">Get Started →</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="tool-hero">
+        <div class="container">
+          <a href="tools.html" class="back-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            All Tools
+          </a>
+          <div class="hero-eyebrow">Tool · 02 / 03 · Typing Test</div>
+          <h1 class="hero-title fade-up">Fingers on<br><em>Fire.</em></h1>
+          <p class="hero-subtitle fade-up" style="animation-delay:.1s">
+            Pick a duration and start typing. We measure your WPM, accuracy, and errors in real time.
+            Works on desktop and mobile.
+          </p>
+        </div>
+      </section>
+
+      <section class="container" style="padding-bottom:80px;">
+
+        <!-- Config bar -->
+        <div class="config-bar fade-up">
+          <div class="config-group">
+            <span class="config-label">Duration</span>
+            <button class="chip" data-duration="15">15s</button>
+            <button class="chip active" data-duration="30">30s</button>
+            <button class="chip" data-duration="60">60s</button>
+            <button class="chip" data-duration="120">120s</button>
+          </div>
+          <div class="config-group">
+            <span class="config-label">Mode</span>
+            <button class="chip active" data-mode="prose">Prose</button>
+            <button class="chip" data-mode="quotes">Quotes</button>
+            <button class="chip" data-mode="code">Code</button>
+          </div>
+          <div class="config-spacer"></div>
+          <button id="reset-btn" class="chip">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Reset
+          </button>
+        </div>
+
+        <!-- Live Stats -->
+        <div class="stats-row">
+          <div class="stat live">
+            <div class="stat-label">Time Left</div>
+            <div class="stat-value violet"><span id="time-val">30</span><span class="stat-unit">s</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">WPM</div>
+            <div class="stat-value"><span id="wpm-val">0</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Accuracy</div>
+            <div class="stat-value"><span id="acc-val">100</span><span class="stat-unit">%</span></div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Errors</div>
+            <div class="stat-value"><span id="err-val">0</span></div>
+          </div>
+        </div>
+
+        <!-- Typing Zone -->
+        <div id="typing-zone" class="typing-zone">
+          <!-- Transparent textarea overlay — captures both desktop keyboard and mobile keyboard -->
+          <textarea
+            id="typing-input"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            autocomplete="off"
+            inputmode="text"
+            aria-label="Type here"
+          ></textarea>
+
+          <!-- Visual text display (pointer-events: none, above) -->
+          <div class="text-display-wrap">
+            <div id="text-display"></div>
+          </div>
+
+          <div class="typing-hint" id="typing-hint">Tap / click here to start typing</div>
+        </div>
+
+        <!-- Progress -->
+        <div class="action-row">
+          <div class="progress-bar">
+            <div id="progress" class="progress-fill"></div>
+          </div>
+          <div class="mono" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);" id="progress-label">0% complete</div>
+        </div>
+
+        <!-- Result -->
+        <div id="result" class="result-overlay">
+          <h2 class="result-title">Well, <em>that happened.</em></h2>
+          <p class="result-subtitle">Here's how your fingers performed.</p>
+
+          <div class="result-stats">
+            <div class="result-stat">
+              <div class="big"><span id="final-wpm">0</span></div>
+              <div class="label">Words / Min</div>
+            </div>
+            <div class="result-stat">
+              <div class="big"><span id="final-acc">0</span>%</div>
+              <div class="label">Accuracy</div>
+            </div>
+            <div class="result-stat">
+              <div class="big"><span id="final-chars">0</span></div>
+              <div class="label">Correct Chars</div>
+            </div>
+            <div class="result-stat">
+              <div class="big"><span id="final-err">0</span></div>
+              <div class="label">Errors</div>
+            </div>
+          </div>
+
+          <p id="verdict" class="result-verdict">—</p>
+
+          <div class="result-actions">
+            <button id="retry-btn" class="btn btn-primary" style="background:var(--violet);box-shadow:0 2px 8px rgba(124,58,237,.25);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Try Again
+            </button>
+            <a href="tools.html" class="btn btn-ghost">Back to Tools</a>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-note">Ira&nbsp;AI · Tools · Typing Test</div>
+          <div class="footer-note">© 2026 — Ira&nbsp;AI</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="typing-test.js"></script>
+</body>
+</html>
